@@ -1,13 +1,47 @@
 #include "btree.h"
-#include <iomanip>
 #include <stdexcept>
 
-bool IsIndexKey(const JsonValue& value){
-	return value.type == JsonType::Number || value.type == JsonType::String
-		|| value.type == JsonType::Bool || value.type == JsonType::Null;
+bool IsIndexKey(const JsonValue& value){return value.type == JsonType::Number || value.type == JsonType::String || value.type == JsonType::Bool || value.type == JsonType::Null;}
+
+ void SkipIndexSpace(istream& file){
+	int c = file.peek();
+
+	while (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\f' || c == '\v'){
+		file.get();
+		c = file.peek();
+	}
 }
 
-static int CompareKeys(const JsonValue& left, const JsonValue& right){
+void WriteIndexString(ostream& file, const string& value){
+	file.put('"');
+
+	for (char c : value){
+		if (c == '"' || c == '\\'){file.put('\\');}
+		file.put(c);
+	}
+
+	file.put('"');
+}
+
+bool ReadIndexString(istream& file, string& value){
+	SkipIndexSpace(file);
+
+	char c;
+	if (!file.get(c) || c != '"'){return false;}
+
+	value.clear();
+	while (file.get(c)){
+		if (c == '"'){return true;}
+		if (c == '\\' && !file.get(c)){return false;}
+		value += c;
+	}
+
+	return false;
+}
+
+
+
+ int CompareKeys(const JsonValue& left, const JsonValue& right){
 	if (left.type != right.type){return left.type < right.type ? -1 : 1;}
 
 	switch (left.type){
@@ -18,9 +52,7 @@ static int CompareKeys(const JsonValue& left, const JsonValue& right){
 	}
 }
 
-void IndexEntry::Add(const string& id){
-	MPUSH(&ids, id);
-}
+void IndexEntry::Add(const string& id){MPUSH(&ids, id);}
 
 BTreeNode::BTreeNode(int degree, bool leaf){
 	entries.data = new IndexEntry*[2 * degree - 1]{};
@@ -54,7 +86,7 @@ BTree::~BTree(){
 	delete root;
 }
 
-static int LowerBound(const BTreeNode* node, const JsonValue& key){
+ int LowerBound(const BTreeNode* node, const JsonValue& key){
 	int i = 0;
 	while (i < node->size && CompareKeys(node->entries.data[i]->key, key) < 0){
 		++i;
@@ -170,7 +202,7 @@ void BTree::Put(const JsonValue& key, const string& id){
 	Insert(root, key, id);
 }
 
-static void CollectIds(const IndexEntry* entry, HashTable& ids){
+ void CollectIds(const IndexEntry* entry, HashTable& ids){
 	for (int i = 0; i < entry->ids.size; ++i){
 		ids.Put(entry->ids.data[i], "");
 	}
@@ -183,7 +215,7 @@ void BTree::Find(const JsonValue& key, HashTable& ids) const{
 	if (entry != nullptr){CollectIds(entry, ids);}
 }
 
-static void CollectRange(const BTreeNode* node, const JsonValue& key,
+ void CollectRange(const BTreeNode* node, const JsonValue& key,
 	bool greater, HashTable& ids){
 	int i = greater ? LowerBound(node, key) : 0;
 
@@ -209,16 +241,19 @@ void BTree::Range(const JsonValue& key, bool greater, HashTable& ids) const{
 	}
 }
 
-static void SaveNode(ostream& file, const BTreeNode* node){
+ void SaveNode(ostream& file, const BTreeNode* node){
 	bool leaf = node->children.data == nullptr;
 	file << node->size << ' ' << leaf << '\n';
 
 	for (int i = 0; i < node->size; ++i){
-		const IndexEntry* entry = node->entries.data[i];
-		file << quoted(ToJson(entry->key)) << ' ' << entry->ids.size;
+				const IndexEntry* entry = node->entries.data[i];
+
+		WriteIndexString(file, ToJson(entry->key));
+		file << ' ' << entry->ids.size;
 
 		for (int j = 0; j < entry->ids.size; ++j){
-			file << ' ' << quoted(entry->ids.data[j]);
+			file << ' ';
+			WriteIndexString(file, entry->ids.data[j]);
 		}
 
 		file << '\n';
@@ -240,16 +275,14 @@ void BTree::Save(ostream& file) const{
 	SaveNode(file, root);
 }
 
+
+
 BTreeNode* BTree::LoadNode(istream& file, int depth, int& leaf_depth,
 	const JsonValue* lower, const JsonValue* upper){
 	int size = 0;
 	int leaf = 0;
 
-	if (!(file >> size >> leaf) || depth > 64 ||
-		size < 0 || size > 2 * degree - 1 ||
-		(leaf != 0 && leaf != 1) ||
-		(depth > 0 && size < degree - 1) ||
-		(leaf == 0 && size == 0)){
+	if (!(file >> size >> leaf) || depth > 64 ||size < 0 || size > 2 * degree - 1 || (leaf != 0 && leaf != 1) || (depth > 0 && size < degree -1) || (leaf == 0 && size == 0)){
 		throw runtime_error("Некорректный узел индекса");
 	}
 
@@ -267,28 +300,18 @@ BTreeNode* BTree::LoadNode(istream& file, int depth, int& leaf_depth,
 			string key_text;
 			int count = 0;
 
-			if (!(file >> quoted(key_text) >> count) || count <= 0){
-				throw runtime_error("Некорректная запись индекса");
-			}
-
+			if (!ReadIndexString(file, key_text) || !(file >> count) || count <= 0){ throw runtime_error("Некорректная запись индекса");}
 			IndexEntry* entry = new IndexEntry;
 			node->entries.data[node->size++] = entry;
 
 			JsonParser parser(key_text);
 			entry->key = parser.Parse();
 
-			if (!IsIndexKey(entry->key) ||
-				(lower != nullptr && CompareKeys(*lower, entry->key) >= 0) ||
-				(upper != nullptr && CompareKeys(entry->key, *upper) >= 0) ||
-				(i > 0 && CompareKeys(node->entries.data[i - 1]->key, entry->key) >= 0)){
-				throw runtime_error("Нарушен порядок ключей индекса");
-			}
+			if (!IsIndexKey(entry->key) || (lower != nullptr && CompareKeys(*lower, entry->key) >= 0) || (upper != nullptr && CompareKeys(entry->key, *upper) >= 0) || (i > 0 && CompareKeys(node->entries.data[i - 1]->key, entry->key) >= 0)){throw runtime_error("Нарушен порядок ключей индекса");}
 
 			for (int j = 0; j < count; ++j){
 				string id;
-				if (!(file >> quoted(id))){
-					throw runtime_error("Не удалось прочитать _id из индекса");
-				}
+				if (!ReadIndexString(file, id)){throw runtime_error("Не удалось прочитать _id из индекса");}
 				entry->Add(id);
 			}
 		}

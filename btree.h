@@ -4,12 +4,15 @@
 #include "hash_table.h"
 
 bool IsIndexKey(const JsonValue& value);
+void WriteIndexString(ostream& file, const string& value);
+bool ReadIndexString(istream& file, string& value);
 
 struct IndexEntry{
 	JsonValue key;
 	Array<string> ids;
 
 	void Add(const string& id);};
+
 
 struct BTreeNode{
 	Array<IndexEntry*> entries;

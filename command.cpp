@@ -43,7 +43,7 @@ bool MatchesLike(const string& text, const string& pattern){
 
 		if (after_percent == string::npos){return false;}
 
-		// Последний % поглощает ещё один символ.
+
 		percent_end = NextSymbol(text, percent_end);
 		i = percent_end;
 		j = after_percent;
@@ -189,7 +189,7 @@ int ExecuteDelete(HashTable& table, const filesystem::path& collectionPath, cons
 	int removed = 0;
 
 	for (unsigned int i = 0; i < table.capacity; ++i){
-		Node* cur = table.cells[i].node;
+		Node* cur = table.cells.data[i].node;
 
 		while (cur != nullptr){
 			Node* next = cur->next;
@@ -261,7 +261,7 @@ static void PrintMatch(const Node& node, const JsonValue& query){
 	}
 }
 
-int ExecuteFind(HashTable& table, const JsonValue& query, const filesystem::path& collectionPath){
+int ExecuteFind(HashTable& table, const JsonValue& query, const filesystem::path& collectionPath, const string& current_version){
 	if (query.type != JsonType::Object){
 		cerr <<  "Для find нужен JSON объект" << endl;
 		return 1;
@@ -269,9 +269,9 @@ int ExecuteFind(HashTable& table, const JsonValue& query, const filesystem::path
 	
 	HashTable ids(31);
 	ids.InitHashTable(16);
-	if (FindIndexedIds(collectionPath, table, query, ids)){
+		if (FindIndexedIds(collectionPath, table, query, ids, current_version)){
 		for (unsigned int i = 0; i < ids.capacity; ++i){
-			for (const Node* cur = ids.cells[i].node; cur != nullptr; cur = cur->next){
+			for (const Node* cur = ids.cells.data[i].node; cur != nullptr; cur = cur->next){
 				const Node* doc = table.Get(cur->key);
 				if (doc != nullptr){PrintMatch(*doc, query);}
 			}
@@ -280,7 +280,7 @@ int ExecuteFind(HashTable& table, const JsonValue& query, const filesystem::path
 	}
 
 	for (unsigned int i = 0; i < table.capacity; ++i){
-		for (const Node* cur = table.cells[i].node; cur != nullptr; cur = cur->next){
+		for (const Node* cur = table.cells.data[i].node; cur != nullptr; cur = cur->next){
 			PrintMatch(*cur, query);
 		}
 	}
@@ -288,23 +288,24 @@ int ExecuteFind(HashTable& table, const JsonValue& query, const filesystem::path
 }
 
 
-int ExecuteCommand(const string& command, const string& input, HashTable& table, const filesystem::path& collectionPath){
+int ExecuteCommand(const string& command, const string& input,
+	HashTable& table, const filesystem::path& collectionPath, const string& content){
 	if (command == "create_index"){
-		CreateIndex(collectionPath, table, input);
+		CreateIndex(collectionPath, table, input, CollectionVersion(content));
 		return 0;
 	}
 
-    JsonParser queryParser(input);
-    JsonValue query = queryParser.Parse();
+	JsonParser queryParser(input);
+	JsonValue query = queryParser.Parse();
 
-    if (command == "insert"){
-        return ExecuteInsert(table, collectionPath, query);
-    } else if (command == "find"){
-        return ExecuteFind(table, query, collectionPath);
-    } else if (command == "delete"){
-        return ExecuteDelete(table, collectionPath, query);
-    } else {
-        cerr << "Неизвестная команда" << command << endl;
-		return 1; 
-    }
+	if (command == "insert"){
+		return ExecuteInsert(table, collectionPath, query);
+	}else if (command == "find"){
+		return ExecuteFind(table, query, collectionPath, CollectionVersion(content));
+	}else if (command == "delete"){
+		return ExecuteDelete(table, collectionPath, query);
+	}
+
+	cerr << "Неизвестная команда " << command << '\n';
+	return 1;
 }

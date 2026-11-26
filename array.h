@@ -7,16 +7,16 @@ using namespace std;
 
 template <typename T>
 struct Array{
-	using Value = T;
 	T* data = nullptr;
 	int size = 0;
 
 	Array() = default;
 	~Array(){delete[] data;}
+
 	Array(const Array& other){
-		Array copy;
 		if (other.size == 0){return;}
 
+		Array copy;
 		copy.data = new T[other.size];
 		copy.size = other.size;
 		for (int i = 0; i < copy.size; ++i){
@@ -25,10 +25,11 @@ struct Array{
 		Swap(copy);
 	}
 
-	Array(Array&& other) noexcept{Swap(other);}
+	Array& operator=(const Array& other){
+		if (this == &other){return *this;}
 
-	Array& operator=(Array other){
-		Swap(other);
+		Array copy(other);
+		Swap(copy);
 		return *this;
 	}
 
@@ -51,12 +52,20 @@ void CleanArray(Array<T>* arr){
 }
 
 template <typename T>
-void InitArray(Array<T>* arr){
-	CleanArray(arr);
+void InitArray(Array<T>* arr, int size = 0){
+	if (size < 0){throw length_error("Некорректный размер массива");}
+
+	Array<T> new_arr;
+	if (size > 0){
+		new_arr.data = new T[size]{};
+		new_arr.size = size;
+	}
+
+	arr->Swap(new_arr);
 }
 
 template <typename T>
-void MPUSH_Index(Array<T>* arr, int index, const typename Array<T>::Value& value){
+void MPUSH_Index(Array<T>* arr, int index, const T& value){
 	if (index < 0 || index > arr->size){return;}
 	if (arr->size == INT_MAX){throw length_error("Массив слишком большой");}
 
@@ -72,8 +81,8 @@ void MPUSH_Index(Array<T>* arr, int index, const typename Array<T>::Value& value
 }
 
 template <typename T>
-void MPUSH(Array<T>* arr, const typename Array<T>::Value& value){
-	MPUSH_Index<T>(arr, arr->size, value);
+void MPUSH(Array<T>* arr, const T& value){
+	MPUSH_Index(arr, arr->size, value);
 }
 
 template <typename T>
@@ -97,7 +106,7 @@ void MDEL(Array<T>* arr, int index){
 }
 
 template <typename T>
-void MSET(Array<T>* arr, int index, const typename Array<T>::Value& value){
+void MSET(Array<T>* arr, int index, const T& value){
 	if (index < 0 || index >= arr->size){return;}
 	arr->data[index] = value;
 }
@@ -113,23 +122,3 @@ void PRINT(Array<T>* arr){
 	cout << endl;
 }
 
-template <typename T>
-void SaveArray(Array<T>* arr, ostream& out){
-	out << arr->size << '\n';
-	for (int i = 0; i < arr->size; ++i){out << arr->data[i] << " ";}
-	out << '\n';
-}
-
-template <typename T>
-void LoadArray(Array<T>* arr, istream& in){
-	int count = 0;
-	if (!(in >> count) || count < 0){return;}
-
-	Array<T> loaded;
-	for (int i = 0; i < count; ++i){
-		T value{};
-		if (!(in >> value)){return;}
-		MPUSH(&loaded, value);
-	}
-	arr->Swap(loaded);
-}

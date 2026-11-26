@@ -81,7 +81,7 @@ int main(int argc, char** argv){
 			}
 			table.Put(id->text, ToJson(*doc));
 		}
-		return ExecuteCommand(command, input, table, collectionPath);
+				return ExecuteCommand(command, input, table, collectionPath, res);
 	}
 	catch (const exception& error){
 		cerr << "Ошибка при загрузке коллекции: " << error.what() << '\n';

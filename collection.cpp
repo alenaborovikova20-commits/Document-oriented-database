@@ -18,7 +18,7 @@ void SaveCollection(const filesystem::path&  path, const HashTable& table){
     bool first = true;
 
     for (unsigned int i = 0; i < table.capacity; ++i){
-        Node* cur = table.cells[i].node;
+        Node* cur = table.cells.data[i].node;
         while (cur != nullptr){
             if (!first) {file << ',';}
             JsonValue key;
