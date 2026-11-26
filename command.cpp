@@ -1,6 +1,7 @@
 #include "command.h"
 #include "json_parser.h"
 #include "collection.h"
+#include "index.h"
 
 
 
@@ -252,34 +253,54 @@ int ExecuteInsert(HashTable& table, const filesystem::path& collectionPath, Json
 }
 
 
-int ExecuteFind(HashTable& table, const JsonValue& query){
+static void PrintMatch(const Node& node, const JsonValue& query){
+	JsonParser parser(node.value);
+	JsonValue doc = parser.Parse();
+	if (MatchesFilter(doc, query)){
+		cout << node.value << '\n';
+	}
+}
+
+int ExecuteFind(HashTable& table, const JsonValue& query, const filesystem::path& collectionPath){
 	if (query.type != JsonType::Object){
 		cerr <<  "Для find нужен JSON объект" << endl;
 		return 1;
 	}
 	
+	HashTable ids(31);
+	ids.InitHashTable(16);
+	if (FindIndexedIds(collectionPath, table, query, ids)){
+		for (unsigned int i = 0; i < ids.capacity; ++i){
+			for (const Node* cur = ids.cells[i].node; cur != nullptr; cur = cur->next){
+				const Node* doc = table.Get(cur->key);
+				if (doc != nullptr){PrintMatch(*doc, query);}
+			}
+		}
+		return 0;
+	}
+
 	for (unsigned int i = 0; i < table.capacity; ++i){
-        Node* cur = table.cells[i].node;
-        while (cur != nullptr){
-			JsonParser parser(cur->value);
-			JsonValue obj = parser.Parse();
-			if (MatchesFilter(obj, query)){
-				cout << cur->value << endl;}
-            cur = cur->next;
-        }
-    }
+		for (const Node* cur = table.cells[i].node; cur != nullptr; cur = cur->next){
+			PrintMatch(*cur, query);
+		}
+	}
 	return 0;
 }
 
 
 int ExecuteCommand(const string& command, const string& input, HashTable& table, const filesystem::path& collectionPath){
+	if (command == "create_index"){
+		CreateIndex(collectionPath, table, input);
+		return 0;
+	}
+
     JsonParser queryParser(input);
     JsonValue query = queryParser.Parse();
 
     if (command == "insert"){
         return ExecuteInsert(table, collectionPath, query);
     } else if (command == "find"){
-        return ExecuteFind(table, query);
+        return ExecuteFind(table, query, collectionPath);
     } else if (command == "delete"){
         return ExecuteDelete(table, collectionPath, query);
     } else {

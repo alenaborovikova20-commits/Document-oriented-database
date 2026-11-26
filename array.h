@@ -13,8 +13,6 @@ struct Array{
 
 	Array() = default;
 	~Array(){delete[] data;}
-
-	// При копировании у каждого массива своя память.
 	Array(const Array& other){
 		Array copy;
 		if (other.size == 0){return;}

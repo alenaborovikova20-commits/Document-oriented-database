@@ -11,8 +11,7 @@ using namespace std;
 
 int main(int argc, char** argv){
 	if (argc != 5){
-		cerr << "Формат ввода: ./no_sql_dbms {Название БД} "
-		     << "{Коллекция} {Команда} '{JSON}'\n";
+		cerr << "Формат ввода: ./no_sql_dbms {Название БД} {Коллекция} {Команда} '{JSON}'\n";
 		return 1;
 	}
 
